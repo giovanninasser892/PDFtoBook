@@ -20,20 +20,20 @@ public static class ReaderBranding
         ConfigureImport(LogoPath,true);
         ApplyIcons();
         ApplyScene();
-        PlayerSettings.bundleVersion="0.1.1";
-        PlayerSettings.Android.bundleVersionCode=2;
+        PlayerSettings.bundleVersion="0.3.0";
+        PlayerSettings.Android.bundleVersionCode=4;
         AssetDatabase.SaveAssets();
         EditorSceneManager.SaveScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
     }
 
-    private static void EnsureFont()
+    public static void EnsureFont()
     {
-        const string path="Assets/Branding/Fonts/Not Jam Signature 21 SDF.asset";
+        const string path="Assets/Branding/Fonts/Not Jam UI 15 SDF.asset";
         if(AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path)!=null)return;
-        var source=AssetDatabase.LoadAssetAtPath<Font>("Assets/Branding/Fonts/Not Jam Signature 21.ttf");
-        if(source==null)throw new FileNotFoundException("Not Jam Signature 21.ttf");
-        var font=TMP_FontAsset.CreateFontAsset(source,84,8,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,2048,2048,AtlasPopulationMode.Dynamic,false);
-        font.name="Not Jam Signature 21 SDF";
+        var source=AssetDatabase.LoadAssetAtPath<Font>("Assets/Branding/Fonts/Not Jam UI 15.ttf");
+        if(source==null)throw new FileNotFoundException("Not Jam UI 15.ttf");
+        var font=TMP_FontAsset.CreateFontAsset(source,90,9,UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,2048,2048,AtlasPopulationMode.Dynamic,false);
+        font.name="Not Jam UI 15 SDF";
         var characters=new System.Text.StringBuilder();
         for(int i=32;i<=126;i++)characters.Append((char)i);
         for(int i=160;i<=255;i++)characters.Append((char)i);
@@ -53,7 +53,7 @@ public static class ReaderBranding
     {
         var view=UnityEngine.Object.FindFirstObjectByType<ReaderView>(FindObjectsInactive.Include);
         if(view==null)return;
-        view.font=AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Branding/Fonts/Not Jam Signature 21 SDF.asset");
+        view.font=AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Branding/Fonts/Not Jam UI 15 SDF.asset");
         view.buttonSprite=AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Branding/UI/UI_Button.png");
         view.sliderSprite=AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Branding/UI/UI_ButtonSlider.png");
         if(view.font==null||view.buttonSprite==null||view.sliderSprite==null)throw new InvalidDataException("Fonte ou sprites da interface ausentes.");
@@ -61,10 +61,10 @@ public static class ReaderBranding
         var fallback=TMP_Settings.defaultFontAsset;
         if(fallback!=null&&fallback!=view.font&&!view.font.fallbackFontAssetTable.Contains(fallback)){view.font.fallbackFontAssetTable.Add(fallback);EditorUtility.SetDirty(view.font);}
         foreach(var text in view.GetComponentsInChildren<TMP_Text>(true)){
-            text.font=view.font;text.color=ReaderView.Ink;text.fontSize=Mathf.Max(13,Mathf.Round(text.fontSize/13)*13);EditorUtility.SetDirty(text);
+            text.font=view.font;text.color=ReaderView.Ink;text.fontSize=Mathf.Max(15,Mathf.Round(text.fontSize/15)*15);EditorUtility.SetDirty(text);
         }
         foreach(var image in view.GetComponentsInChildren<UnityEngine.UI.Image>(true)) {
-            if(image.name=="Logo")continue;
+            if(image.name=="Logo"||image==view.pinOverlay||image==view.pinImage)continue;
             image.color=image.name=="Fill"||image.name=="Handle"||image.name=="ProgressLine"?Color.white:ReaderView.Background;
             EditorUtility.SetDirty(image);
         }
@@ -86,14 +86,13 @@ public static class ReaderBranding
         ((RectTransform)view.jumpButton.transform).anchoredPosition=new Vector2(380,94);((RectTransform)view.jumpButton.transform).sizeDelta=new Vector2(170,62);
         if(Camera.main!=null)Camera.main.backgroundColor=ReaderView.Background;
         var library=view.libraryPanel.transform;
-        var existing=library.Find("Logo");
-        var rect=existing!=null?(RectTransform)existing:ReaderView.Rect("Logo",library);
-        rect.anchorMin=rect.anchorMax=new Vector2(0,1);rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(28,-20);rect.sizeDelta=new Vector2(64,64);
-        var logo=rect.GetComponent<UnityEngine.UI.Image>();
-        if(logo==null)logo=rect.gameObject.AddComponent<UnityEngine.UI.Image>();
-        logo.sprite=AssetDatabase.LoadAssetAtPath<Sprite>(LogoPath);logo.color=Color.white;logo.preserveAspect=true;logo.raycastTarget=false;
+        var logo=library.Find("Logo");
+        if(logo!=null)UnityEngine.Object.DestroyImmediate(logo.gameObject);
         var eyebrow=library.Find("Eyebrow") as RectTransform;
-        if(eyebrow!=null){eyebrow.anchoredPosition=new Vector2(108,-32);eyebrow.sizeDelta=new Vector2(584,36);}
+        if(eyebrow!=null){eyebrow.anchoredPosition=new Vector2(28,-24);eyebrow.sizeDelta=new Vector2(664,36);}
+        var title=library.Find("Title").GetComponent<TMP_Text>();
+        title.fontSize=75;title.fontStyle=FontStyles.Bold;
+        ((RectTransform)title.transform).sizeDelta=new Vector2(664,90);
         EditorUtility.SetDirty(view);
         EditorSceneManager.MarkSceneDirty(view.gameObject.scene);
     }

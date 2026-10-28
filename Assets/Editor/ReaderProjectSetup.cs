@@ -24,8 +24,8 @@ public static class ReaderProjectSetup
         var scaler=canvasObject.GetComponent<UnityEngine.UI.CanvasScaler>();scaler.uiScaleMode=UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;scaler.referenceResolution=new Vector2(720,1280);scaler.matchWidthOrHeight=0;
         var safe=ReaderView.Rect("SafeArea",canvasObject.transform);ReaderView.Fill(safe);safe.gameObject.AddComponent<SafeArea>();
         var view=safe.gameObject.AddComponent<ReaderView>();
-        view.font=AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Branding/Fonts/Not Jam Signature 21 SDF.asset");
-        if(view.font==null)throw new InvalidOperationException("Importe a fonte Not Jam Signature antes de criar a cena.");
+        view.font=AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Branding/Fonts/Not Jam UI 15 SDF.asset");
+        if(view.font==null)throw new InvalidOperationException("Importe a fonte Not Jam UI antes de criar a cena.");
         var lib=ReaderView.Panel("Library",safe,ReaderView.Background);view.libraryPanel=lib.gameObject;
         var eyebrow=view.Text("Eyebrow",lib.transform,"PDFtoBook  /  LEITOR LOCAL",20,ReaderView.Accent);ReaderView.Fill(eyebrow.rectTransform,28,1200,28,28);Top(eyebrow.rectTransform,28,32,664,36);
         var heading=view.Text("Title",lib.transform,"Biblioteca",52,ReaderView.Ink);Top(heading.rectTransform,28,76,664,76);
@@ -63,6 +63,8 @@ public static class ReaderProjectSetup
         var app=new GameObject("ReaderApp").AddComponent<ReaderApp>();app.Configure(view);
         reader.gameObject.SetActive(false);
         ReaderBranding.ApplyScene();
+        ReaderFeatureSetup.Apply();
+        ReaderMotionSetup.Apply();
         Directory.CreateDirectory("Assets/Scenes");EditorSceneManager.SaveScene(scene,"Assets/Scenes/Reader.unity");
         EditorBuildSettings.scenes=new[]{new EditorBuildSettingsScene("Assets/Scenes/Reader.unity",true)};
         AssetDatabase.SaveAssets();
@@ -75,7 +77,7 @@ public static class ReaderProjectSetup
     {
         PlayerSettings.productName="PDFtoBook";
         PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android,"com.pdftobook.reader");
-        PlayerSettings.bundleVersion="0.1.1";PlayerSettings.Android.bundleVersionCode=2;
+        PlayerSettings.bundleVersion="0.3.0";PlayerSettings.Android.bundleVersionCode=4;
         PlayerSettings.defaultInterfaceOrientation=UIOrientation.Portrait;
         PlayerSettings.Android.minSdkVersion=AndroidSdkVersions.AndroidApiLevel25;
         PlayerSettings.Android.targetSdkVersion=AndroidSdkVersions.AndroidApiLevel36;

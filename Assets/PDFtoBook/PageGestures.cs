@@ -9,6 +9,8 @@ namespace PDFtoBook
     {
         [SerializeField] private RectTransform page;
         public event Action<int> Navigate;
+        public event Action<Vector2> PinPlaced;
+        public bool PlacingPin { get; set; }
         public event Action ToggleControls;
         public event Action<float> ZoomFinished;
         private RectTransform viewport;
@@ -22,7 +24,7 @@ namespace PDFtoBook
         public void OnPointerDown(PointerEventData e) { start = e.position; startTime = Time.unscaledTime; usedPinch = false; }
         public void OnDrag(PointerEventData e)
         {
-            if (pinching || zoom <= 1.01f) return;
+            if (PlacingPin || pinching || zoom <= 1.01f) return;
             float scale = GetComponentInParent<Canvas>().scaleFactor;
             page.anchoredPosition += e.delta / scale;
             ClampPan();
@@ -31,17 +33,26 @@ namespace PDFtoBook
         {
             if (usedPinch || pinching) return;
             Vector2 delta = e.position - start;
+            if (PlacingPin) {
+                if (delta.magnitude < 25 && Time.unscaledTime - startTime < 0.6f &&
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(page, e.position, e.pressEventCamera, out var point) &&
+                    page.rect.Contains(point)) {
+                    PinPlaced?.Invoke(new Vector2((point.x - page.rect.xMin) / page.rect.width,
+                        (point.y - page.rect.yMin) / page.rect.height));
+                }
+                return;
+            }
             if (zoom > 1.01f) { if (delta.magnitude < 25 && Time.unscaledTime - startTime < 0.6f) ToggleControls?.Invoke(); return; }
             if (Mathf.Abs(delta.x) > 70 && Mathf.Abs(delta.x) > Mathf.Abs(delta.y) * 1.3f) Navigate?.Invoke(delta.x < 0 ? 1 : -1);
             else if (delta.magnitude < 25 && Time.unscaledTime - startTime < 0.6f) {
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(viewport, e.position, null, out var local);
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(viewport, e.position, e.pressEventCamera, out var local);
                 float fraction = (local.x - viewport.rect.xMin) / viewport.rect.width;
                 if (fraction < 0.22f) Navigate?.Invoke(-1);
                 else if (fraction > 0.78f) Navigate?.Invoke(1);
                 else ToggleControls?.Invoke();
             }
         }
-        public void OnScroll(PointerEventData e) { SetZoom(zoom + e.scrollDelta.y * 0.15f); ZoomFinished?.Invoke(zoom); }
+        public void OnScroll(PointerEventData e) { if (PlacingPin) return; SetZoom(zoom + e.scrollDelta.y * 0.15f); ZoomFinished?.Invoke(zoom); }
         private void Update()
         {
             var screen = Touchscreen.current;
@@ -52,6 +63,11 @@ namespace PDFtoBook
                 if (count == 0) first = touch.position.ReadValue();
                 else if (count == 1) second = touch.position.ReadValue();
                 count++;
+            }
+            if (PlacingPin) {
+                if (count >= 2) usedPinch = true;
+                pinching = false;
+                return;
             }
             if (count >= 2) {
                 float distance = Vector2.Distance(first, second);

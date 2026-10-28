@@ -12,7 +12,7 @@ namespace PDFtoBook
     public sealed class ReaderView : MonoBehaviour
     {
         public TMP_FontAsset font;
-        public Sprite buttonSprite, sliderSprite;
+        public Sprite buttonSprite, sliderSprite, pinSprite;
         public GameObject libraryPanel, readerPanel, topBar, bottomBar, dialog;
         public RectTransform bookList, pageRect, pageViewport;
         public TextMeshProUGUI libraryStatus, readerStatus, readerTitle, pageLabel;
@@ -21,16 +21,23 @@ namespace PDFtoBook
         public UnityEngine.UI.Slider progress;
         public TMP_InputField search;
         public PageGestures gestures;
+        public ReaderFeedbacks feedbacks;
+        public bool IsTransitioning => feedbacks!=null&&feedbacks.IsTransitioning;
+        public UnityEngine.UI.Button missionButton, pinButton;
+        public TextMeshProUGUI missionLabel, readerMissionLabel;
+        public UnityEngine.UI.Image missionFill, pinOverlay, pinImage;
         private bool dark = true;
         public static Color Background => Color.black;
         public static Color Surface => new Color32(71, 114, 56, 255);
         public static Color Ink => Color.white;
         public static Color Muted => Color.white;
         public static Color Accent => new Color32(97, 165, 63, 255);
+        public static Color Destructive => new Color32(185, 69, 29, 255);
 
         public static RectTransform Rect(string name, Transform parent)
         {
             var go = new GameObject(name, typeof(RectTransform));
+            go.layer=parent.gameObject.layer;
             var rect = (RectTransform)go.transform; rect.SetParent(parent, false); return rect;
         }
         public static void Fill(RectTransform rect, float left=0, float bottom=0, float right=0, float top=0)
@@ -47,7 +54,7 @@ namespace PDFtoBook
         {
             var rect = Rect(name, parent); Fill(rect);
             var text = rect.gameObject.AddComponent<TextMeshProUGUI>();
-            text.font = font; text.text = value; text.fontSize = Mathf.Max(13,Mathf.Round(size/13)*13); text.color = color;
+            text.font = font; text.text = value; text.fontSize = Mathf.Max(15,Mathf.Round(size/15)*15); text.color = color;
             text.enableAutoSizing = false; text.raycastTarget = false; text.richText = false;
             text.alignment = TextAlignmentOptions.MidlineLeft; text.overflowMode = TextOverflowModes.Ellipsis;
             return text;
@@ -67,7 +74,7 @@ namespace PDFtoBook
         public static ButtonRole RoleFor(string name)
         {
             switch(name) {
-                case "ImportPdf": case "Go": case "Bookmark": return ButtonRole.Positive;
+                case "ImportPdf": case "Go": case "Bookmark": case "SaveGoal": case "Pin": return ButtonRole.Positive;
                 case "Back": case "Remove": case "Cancel": case "Close": return ButtonRole.Negative;
                 default: return ButtonRole.Neutral;
             }
@@ -75,11 +82,15 @@ namespace PDFtoBook
         public void StyleButton(UnityEngine.UI.Button button,ButtonRole role)
         {
             var image=button.GetComponent<UnityEngine.UI.Image>();
-            image.color=role==ButtonRole.Positive?Accent:role==ButtonRole.Negative?Surface:Color.white;
+            image.color=button.name=="Remove"?Destructive:role==ButtonRole.Positive?Accent:role==ButtonRole.Negative?Surface:Color.white;
+            if(button.GetComponent<ReaderButtonFeedback>()==null)button.gameObject.AddComponent<ReaderButtonFeedback>();
             if(buttonSprite!=null){image.sprite=buttonSprite;image.type=UnityEngine.UI.Image.Type.Sliced;image.fillCenter=true;image.pixelsPerUnitMultiplier=0.5f;}
             var outline=image.GetComponent<UnityEngine.UI.Outline>();
             if(outline!=null){if(Application.isPlaying)Destroy(outline);else DestroyImmediate(outline);}
-            foreach(var text in button.GetComponentsInChildren<TMP_Text>(true))text.color=role==ButtonRole.Negative?Color.white:Color.black;
+            foreach(var text in button.GetComponentsInChildren<TMP_Text>(true)){
+                text.color=button.name=="Remove"||role==ButtonRole.Negative?Color.white:Color.black;
+                text.fontSize=24;text.fontStyle=FontStyles.Normal;text.textWrappingMode=TextWrappingModes.NoWrap;
+            }
         }
         public static void Height(Transform item, float height, float width=-1)
         {
@@ -87,14 +98,52 @@ namespace PDFtoBook
             layout.minHeight = layout.preferredHeight = height;
             if (width >= 0) layout.minWidth = layout.preferredWidth = width;
         }
-        public void ShowLibrary() { libraryPanel.SetActive(true); readerPanel.SetActive(false); HideDialog(); }
-        public void ShowReader() { libraryPanel.SetActive(false); readerPanel.SetActive(true); topBar.SetActive(true); bottomBar.SetActive(true); }
-        public void ToggleChrome() { bool value = !topBar.activeSelf; topBar.SetActive(value); bottomBar.SetActive(value); }
+        public void ShowLibrary() { HideDialog();if(feedbacks!=null)feedbacks.ShowScreen(false);else{libraryPanel.SetActive(true);readerPanel.SetActive(false);} }
+        public void ShowReader() { if(feedbacks!=null)feedbacks.ShowScreen(true);else{libraryPanel.SetActive(false);readerPanel.SetActive(true);topBar.SetActive(true);bottomBar.SetActive(true);} }
+        public void ToggleChrome() { bool value = !topBar.activeSelf; topBar.SetActive(value); bottomBar.SetActive(value); if(value)feedbacks?.SyncVisibleBars(); }
         public void SetTheme(bool value)
         {
             dark = value;
             pageViewport.GetComponent<UnityEngine.UI.Image>().color = dark ? Background : Color.white;
             pageImage.color = Color.white; // PDF colors remain faithful; theme affects the surrounding UI.
+        }
+        public void UpdateMission(DailyMission mission,bool animate=false)
+        {
+            string count=mission.target>0?$"{mission.pages} / {mission.target} páginas":$"{mission.pages} páginas · Sem meta";
+            missionLabel.text=count+(mission.Complete?" · Feita!":"");
+            readerMissionLabel.text=mission.target>0?$"Hoje: {mission.pages}/{mission.target}"+(mission.Complete?" · Meta feita!":""):$"Hoje: {mission.pages} páginas";
+            if(feedbacks!=null)feedbacks.SetMission(mission,animate);
+            else ((RectTransform)missionFill.transform).anchorMax=new Vector2(mission.target>0?Mathf.Clamp01((float)mission.pages/mission.target):0,1);
+        }
+        public void SetPin(BookRecord book,bool placing)
+        {
+            pinOverlay.gameObject.SetActive(placing);
+            bool visible=book!=null&&book.hasPin&&book.pinPage==book.page;
+            pinImage.gameObject.SetActive(visible);
+            if(visible){
+                var rect=(RectTransform)pinImage.transform;
+                rect.anchorMin=rect.anchorMax=new Vector2(book.pinX,book.pinY);
+                rect.anchoredPosition=Vector2.zero;
+            }
+            pinButton.GetComponentInChildren<TextMeshProUGUI>().text=placing?"Cancelar":visible?"Mover pin":"Pin";
+            StyleButton(pinButton,placing?ButtonRole.Negative:ButtonRole.Positive);
+        }
+        public void EditMission(int currentTarget,Action<int> save)
+        {
+            var box=Dialog("Meta diária de leitura",430);
+            var help=Text("Help",box,"Cada avanço soma 1 página. O contador\nreinicia às 00:00 do aparelho.",25,Ink);
+            Fill(help.rectTransform,24,240,24,80);help.textWrappingMode=TextWrappingModes.Normal;
+            var input=Input("DailyTarget",box,"Páginas por dia",TMP_InputField.ContentType.IntegerNumber);
+            Fill((RectTransform)input.transform,24,150,24,210);input.characterLimit=4;
+            input.text=currentTarget>0?currentTarget.ToString():"";
+            var error=Text("Validation",box,"Escolha de 1 a 9999 páginas.",20,Ink);Fill(error.rectTransform,24,100,24,288);
+            var cancel=Button("Cancel",box,"Cancelar",HideDialog);Fill((RectTransform)cancel.transform,24,24,320,346);
+            UnityAction submit=()=>{
+                if(int.TryParse(input.text,out int number)&&number>=1&&number<=9999){HideDialog();save(number);}
+                else error.text="Digite um número entre 1 e 9999.";
+            };
+            var ok=Button("SaveGoal",box,"Salvar meta",submit);Fill((RectTransform)ok.transform,320,24,24,346);
+            input.onSubmit.AddListener(_=>submit());input.ActivateInputField();
         }
         public void UpdateBookRows(IEnumerable<BookRecord> books, Action<BookRecord> open, Action<BookRecord> remove)
         {

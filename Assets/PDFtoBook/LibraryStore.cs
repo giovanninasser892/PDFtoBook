@@ -16,6 +16,24 @@ namespace PDFtoBook
         public int page;
         public long lastRead;
         public List<int> bookmarks = new List<int>();
+        public bool hasPin;
+        public int pinPage;
+        public float pinX, pinY;
+
+        public void SetPin(int displayedPage, Vector2 position)
+        {
+            hasPin = true;
+            pinPage = displayedPage;
+            pinX = Mathf.Clamp01(position.x);
+            pinY = Mathf.Clamp01(position.y);
+        }
+
+        public bool ClearPinOnPageChange(int nextPage)
+        {
+            if (!hasPin || nextPage == pinPage) return false;
+            hasPin = false;
+            return true;
+        }
         public string Progress => $"Página {page + 1} de {pageCount}  ·  {Mathf.RoundToInt(100f * (page + 1) / Math.Max(1, pageCount))}%";
     }
 
@@ -25,6 +43,7 @@ namespace PDFtoBook
         public int version = 1;
         public bool dark = true;
         public List<BookRecord> books = new List<BookRecord>();
+        public DailyMission mission = new DailyMission();
     }
 
     /// <summary>Versioned JSON with a flushed temporary file and previous-version backup.</summary>
@@ -51,10 +70,17 @@ namespace PDFtoBook
         {
             var state = JsonUtility.FromJson<LibraryState>(File.ReadAllText(path));
             if (state == null || state.version != 1 || state.books == null) throw new InvalidDataException("Biblioteca inválida.");
+            state.mission ??= new DailyMission();
+            state.mission.target = Mathf.Clamp(state.mission.target, 0, 9999);
+            state.mission.pages = Math.Max(0, state.mission.pages);
             foreach (var book in state.books) {
                 if (book == null || !Guid.TryParse(book.id, out _) || book.pageCount < 1) throw new InvalidDataException("Livro inválido.");
                 book.page = Mathf.Clamp(book.page, 0, book.pageCount - 1);
                 book.bookmarks ??= new List<int>();
+                if (book.pinPage != book.page || float.IsNaN(book.pinX) || float.IsNaN(book.pinY) ||
+                    float.IsInfinity(book.pinX) || float.IsInfinity(book.pinY)) book.hasPin = false;
+                book.pinX = Mathf.Clamp01(book.pinX);
+                book.pinY = Mathf.Clamp01(book.pinY);
                 book.bookmarks.RemoveAll(page => page < 0 || page >= book.pageCount);
             }
             return state;
